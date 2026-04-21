@@ -5,9 +5,10 @@ import { FeedbackState } from '../types';
 interface FeedbackModalProps {
   feedback: FeedbackState;
   onNext: () => void;
+  nextLabel?: string;
 }
 
-export default function FeedbackModal({ feedback, onNext }: FeedbackModalProps) {
+export default function FeedbackModal({ feedback, onNext, nextLabel = 'Next Email →' }: FeedbackModalProps) {
   if (!feedback.isVisible) return null;
 
   return (
@@ -86,7 +87,7 @@ export default function FeedbackModal({ feedback, onNext }: FeedbackModalProps) 
             onClick={onNext}
             className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold rounded-lg transition-all transform hover:scale-105 active:scale-95"
           >
-            Next Email →
+            {nextLabel}
           </button>
         </div>
       </div>

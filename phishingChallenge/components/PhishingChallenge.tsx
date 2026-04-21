@@ -7,34 +7,22 @@ import {
   FeedbackState,
   Difficulty,
   Rank,
-  RankThreshold,
   Achievement,
 } from '../types';
 import { generatePhishingEmail } from '../utils/emailGenerator';
+import { saveProgressSummary } from '../utils/progressStore';
 import EmailCard from './EmailCard';
 import GamePanel from './GamePanel';
 import ActionButtons from './ActionButtons';
 import FeedbackModal from './FeedbackModal';
-import RankCard from './RankCard';
-import SkillChart from './SkillChart';
-import Achievements from './Achievements';
-import Leaderboard from './Leaderboard';
 
 interface PhishingChallengeProps {
   initialDifficulty?: Difficulty;
   timeLimit?: number;
 }
 
-const TOTAL_LEVELS = 10;
+const TOTAL_SUBLEVELS = 3;
 const FAST_COMPLETION_THRESHOLD = 0.6;
-
-const RANK_THRESHOLDS: RankThreshold[] = [
-  { rank: 'Beginner', xpRequired: 0 },
-  { rank: 'Trainee', xpRequired: 200 },
-  { rank: 'Analyst', xpRequired: 500 },
-  { rank: 'Expert', xpRequired: 900 },
-  { rank: 'Elite Security Analyst', xpRequired: 1300 },
-];
 
 interface SkillStats {
   phishing: { correct: number; total: number };
@@ -78,6 +66,7 @@ export default function PhishingChallenge({
   timeLimit = 120,
 }: PhishingChallengeProps) {
   const [skillStats, setSkillStats] = useState<SkillStats>(INITIAL_SKILL_STATS);
+  const [isLevelComplete, setIsLevelComplete] = useState(false);
 
   // Game State
   const [gameState, setGameState] = useState<GameState>({
@@ -94,7 +83,7 @@ export default function PhishingChallenge({
     totalXP: 0,
     rank: 'Beginner',
     levelsCompleted: 0,
-    totalLevels: TOTAL_LEVELS,
+    totalLevels: TOTAL_SUBLEVELS,
     achievements: [],
     skillBreakdown: {
       phishingDetection: 0,
@@ -271,6 +260,32 @@ export default function PhishingChallenge({
 
   // Handle next email
   const handleNextEmail = useCallback(() => {
+    const overallAccuracy = gameState.gameTotal > 0
+      ? Math.round((gameState.accuracy / gameState.gameTotal) * 100)
+      : 0;
+
+    if (gameState.level >= gameState.totalLevels) {
+      saveProgressSummary({
+        stageLabel: 'Level 1 Complete - Phishing Analysis',
+        stageNumber: 1,
+        score: gameState.score,
+        streak: gameState.streak,
+        accuracy: overallAccuracy,
+        totalXP: gameState.totalXP,
+        rank: gameState.rank,
+        levelsCompleted: gameState.levelsCompleted,
+        totalLevels: gameState.totalLevels,
+        achievements: gameState.achievements,
+        skillBreakdown: gameState.skillBreakdown,
+        completedAt: new Date().toISOString(),
+        nextRoute: '/password',
+      });
+
+      setFeedback({ isVisible: false, isCorrect: false, message: '', clues: [], explanation: '', xpEarned: 0 });
+      setIsLevelComplete(true);
+      return;
+    }
+
     setFeedback({ isVisible: false, isCorrect: false, message: '', clues: [], explanation: '', xpEarned: 0 });
 
     setGameState((prev) => {
@@ -294,10 +309,85 @@ export default function PhishingChallenge({
   const overallAccuracy = gameState.gameTotal > 0
     ? Math.round((gameState.accuracy / gameState.gameTotal) * 100)
     : 0;
-  const eliteGoalReached =
-    gameState.levelsCompleted >= gameState.totalLevels &&
-    overallAccuracy >= 80 &&
-    gameState.rank === 'Elite Security Analyst';
+  const isFinalSublevel = gameState.level >= gameState.totalLevels;
+
+  if (isLevelComplete) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-blue-950/30 to-gray-950 p-4 md:p-8">
+        <div className="max-w-5xl mx-auto space-y-8">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl md:text-5xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
+              🔍 Phishing Analysis Challenge
+            </h1>
+            <p className="text-gray-400 text-lg">
+              Level 1 complete. Your progress has been summarized and saved.
+            </p>
+          </div>
+
+          <div className="bg-gradient-to-br from-gray-900 to-gray-950 border border-cyan-500/40 rounded-2xl p-6 shadow-2xl space-y-6">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200">Progress Summary</p>
+              <h2 className="text-3xl font-black text-white mt-2">Level 1 unlocked the next stage</h2>
+              <p className="text-gray-300 mt-2">
+                You completed the phishing sublevels and are ready for password strength analysis.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+                <p className="text-xs uppercase tracking-wider text-gray-400">Score</p>
+                <p className="text-3xl font-black text-purple-300 mt-2">{gameState.score}</p>
+              </div>
+              <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+                <p className="text-xs uppercase tracking-wider text-gray-400">Accuracy</p>
+                <p className="text-3xl font-black text-cyan-300 mt-2">{overallAccuracy}%</p>
+              </div>
+              <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+                <p className="text-xs uppercase tracking-wider text-gray-400">Rank</p>
+                <p className="text-3xl font-black text-white mt-2">{gameState.rank}</p>
+              </div>
+              <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+                <p className="text-xs uppercase tracking-wider text-gray-400">Sublevels</p>
+                <p className="text-3xl font-black text-emerald-300 mt-2">
+                  {gameState.levelsCompleted}/{gameState.totalLevels}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300">
+              <div className="rounded-xl border border-gray-700 bg-gray-900/70 p-4">
+                <p className="text-xs uppercase tracking-wider text-gray-400 mb-2">Achievement Summary</p>
+                <p>{gameState.achievements.length > 0 ? gameState.achievements.join(', ') : 'No achievements unlocked yet.'}</p>
+              </div>
+              <div className="rounded-xl border border-gray-700 bg-gray-900/70 p-4">
+                <p className="text-xs uppercase tracking-wider text-gray-400 mb-2">Next Stage</p>
+                <p>Level 2 starts with password strength analysis.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  window.location.href = '/password';
+                }}
+                className="px-5 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold text-center hover:from-cyan-400 hover:to-blue-400 transition-colors"
+              >
+                Continue to Level 2
+              </button>
+              <button
+                onClick={() => {
+                  window.location.href = '/dashboard';
+                }}
+                className="px-5 py-3 rounded-lg bg-gray-800 border border-gray-700 text-gray-200 font-semibold text-center hover:bg-gray-700 transition-colors"
+              >
+                Open Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-blue-950/30 to-gray-950 p-4 md:p-8">
@@ -310,53 +400,27 @@ export default function PhishingChallenge({
           <p className="text-gray-400 text-lg">
             Analyze emails and identify phishing attempts before they compromise security
           </p>
+          <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
+            <button
+              onClick={() => {
+                window.location.href = '/dashboard';
+              }}
+              className="px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-400/40 text-cyan-200 text-sm font-semibold hover:bg-cyan-500/30 transition-colors"
+            >
+              Open Dashboard
+            </button>
+            <button
+              onClick={() => {
+                window.location.href = '/password';
+              }}
+              className="px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-200 text-sm font-semibold hover:bg-gray-700 transition-colors"
+            >
+              Password Strength
+            </button>
+          </div>
         </div>
 
-        {/* Game Panel */}
         <GamePanel gameState={gameState} />
-
-        {/* Progress Dashboard */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <RankCard rank={gameState.rank} totalXP={gameState.totalXP} thresholds={RANK_THRESHOLDS} />
-
-          <div className="bg-gradient-to-br from-gray-900 to-gray-950 border border-gray-700 rounded-lg p-5 shadow-lg">
-            <h3 className="text-lg font-bold text-white mb-4">Progress Overview</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="p-3 rounded-lg bg-gray-800/60 border border-gray-700">
-                <p className="text-gray-400">Levels Completed</p>
-                <p className="text-xl font-bold text-white">{gameState.levelsCompleted}/{gameState.totalLevels}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-gray-800/60 border border-gray-700">
-                <p className="text-gray-400">Overall Accuracy</p>
-                <p className="text-xl font-bold text-white">{overallAccuracy}%</p>
-              </div>
-              <div className="p-3 rounded-lg bg-gray-800/60 border border-gray-700">
-                <p className="text-gray-400">Total XP</p>
-                <p className="text-xl font-bold text-cyan-300">{gameState.totalXP}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-gray-800/60 border border-gray-700">
-                <p className="text-gray-400">Final Goal</p>
-                <p className={`text-sm font-semibold ${eliteGoalReached ? 'text-emerald-300' : 'text-amber-300'}`}>
-                  {eliteGoalReached ? 'Elite Security Analyst unlocked' : 'In progress'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <SkillChart skills={gameState.skillBreakdown} />
-          <Achievements achievements={gameState.achievements} />
-        </div>
-
-        <Leaderboard currentXP={gameState.totalXP} currentRank={gameState.rank} />
-
-        {eliteGoalReached && (
-          <div className="bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-blue-500/20 border border-emerald-400/50 rounded-lg p-5">
-            <h2 className="text-2xl font-black text-white">🏆 Become an Elite Security Analyst</h2>
-            <p className="text-emerald-100 mt-2">
-              Mission complete: all levels cleared, 80%+ accuracy maintained, and Elite rank achieved.
-            </p>
-          </div>
-        )}
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -444,7 +508,11 @@ export default function PhishingChallenge({
         </div>
 
         {/* Feedback Modal */}
-        <FeedbackModal feedback={feedback} onNext={handleNextEmail} />
+        <FeedbackModal
+          feedback={feedback}
+          onNext={handleNextEmail}
+          nextLabel={isFinalSublevel ? 'Finish Level 1' : 'Next Sublevel →'}
+        />
       </div>
     </div>
   );
